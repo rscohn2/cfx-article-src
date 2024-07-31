@@ -1,6 +1,6 @@
 import torch
 import math
-import transpose_cute as tc
+#import transpose_cute as tc
 import copy_cute as cc
 import argparse
 
@@ -12,8 +12,7 @@ parser.add_argument('-M', help='Number of rows, M', default=32768)
 parser.add_argument('-N', help='Number of columns, N', default=32768)
 args = parser.parse_args()
 
-cuda = torch.device('cuda')
-A = torch.normal(0,1,size=(args.M, args.N)).to(device=cuda)
+A = torch.normal(0,1,size=(args.M, args.N))
 AT_reference = torch.transpose(A, 0, 1)
 
 def benchmark(stmt, glob, desc): 
@@ -45,7 +44,7 @@ compiled_transpose = torch.compile(lambda A: torch.transpose(A, 0, 1).contiguous
 benchmark("compiled_transpose(A)",{"compiled_transpose":compiled_transpose,"A": A},"Torch transpose (compiled):")
 print()
 
-for ver in [tc.version.naive,tc.version.smem,tc.version.swizzle,tc.version.tma]:
-  benchmark("tc.transpose(A, version=ver)",{"tc": tc, "A": A, "ver": ver},tc.get_version_info(ver))
-  validate(tc.transpose(A, version=ver), AT_reference)
-  print()
+#for ver in [tc.version.naive,tc.version.smem,tc.version.swizzle,tc.version.tma]:
+#  benchmark("tc.transpose(A, version=ver)",{"tc": tc, "A": A, "ver": ver},tc.get_version_info(ver))
+#  validate(tc.transpose(A, version=ver), AT_reference)
+#  print()

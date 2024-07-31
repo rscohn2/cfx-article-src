@@ -38,8 +38,6 @@
 
 #include <chrono>
 
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
 
 #include "cutlass/numeric_types.h"
 #include <cute/arch/cluster_sm90.hpp>
@@ -49,7 +47,6 @@
 
 #include "cutlass/util/GPU_Clock.hpp"
 #include "cutlass/util/command_line.h"
-#include "cutlass/util/helper_cuda.hpp"
 #include "cutlass/util/print_error.hpp"
 
 #include "cutlass/detail/layout.hpp"
@@ -58,13 +55,14 @@
 #include "util.h"
 
 template <class TensorS, class TensorD, class ThreadLayout, class VecLayout>
-__global__ static void __launch_bounds__(256, 1)
-    copyKernel(TensorS const S, TensorD const D, ThreadLayout, VecLayout) {
+static void copyKernel(TensorS const S, TensorD const D, ThreadLayout, VecLayout) {
   using namespace cute;
   using Element = typename TensorS::value_type;
 
-  Tensor gS = S(make_coord(_, _), blockIdx.x, blockIdx.y);   // (bM, bN)
-  Tensor gD = D(make_coord(_, _), blockIdx.x, blockIdx.y); // (bN, bM)
+  auto block_x = syclcompat::work_group_id::x();
+  auto block_y = syclcompat::work_group_id::y();
+  Tensor gS = S(make_coord(_, _), block_x, block_y);   // (bM, bN)
+  Tensor gD = D(make_coord(_, _), block_x, block_y); // (bN, bM)
 
   // Define `AccessType` which controls the size of the actual memory access.
   using AccessType = cutlass::AlignedArray<Element, size(VecLayout{})>;
@@ -85,7 +83,8 @@ __global__ static void __launch_bounds__(256, 1)
       VecLayout{});                 // vector layout (e.g. 4x1)
 
   // Construct a Tensor corresponding to each thread's slice.
-  auto thr_copy = tiled_copy.get_thread_slice(threadIdx.x);
+  auto thread_x = syclcompat::local_id::x();
+  auto thr_copy = tiled_copy.get_thread_slice(thread_x);
 
   Tensor tSgS = thr_copy.partition_S(gS);             // (CopyOp, CopyM, CopyN)
   Tensor tDgD = thr_copy.partition_D(gD);             // (CopyOp, CopyM, CopyN)
@@ -132,11 +131,11 @@ template <typename T> void copy_baseline(TransposeParams<T> params) {
   // Determine grid and block dimensions
   //
 
-  dim3 gridDim(
+  auto gridDim = syclcompat::dim3(
       size<1>(tiled_tensor_S),
       size<2>(tiled_tensor_S)); // Grid shape corresponds to modes m' and n'
-  dim3 blockDim(size(threadLayout)); // 256 threads
+  auto blockDim = syclcompat::dim3(size(threadLayout)); // 256 threads
 
-  copyKernel<<<gridDim, blockDim>>>(tiled_tensor_S, tiled_tensor_D,
-                                       threadLayout,  vec_layout);
+  syclcompat::launch<copyKernel<decltype(tiled_tensor_S), decltype(tiled_tensor_D), decltype(threadLayout), decltype(vec_layout)>>(
+      gridDim, blockDim, tiled_tensor_S, tiled_tensor_D, threadLayout, vec_layout);
 }

@@ -36,17 +36,13 @@ torch::Tensor copy_cute(torch::Tensor input,
     const int N = input.sizes()[1];
 
     // We will allocate the matrix on GPU and set the datatype to be the same as the input.
-    auto output_options = torch::TensorOptions().device(torch::kCUDA).dtype(input.dtype());
+    auto output_options = torch::TensorOptions().dtype(input.dtype());
     _output = torch::empty({M, N}, output_options);
   }
 
   // Ensuring that the matrices are contiguous. 
   torch::Tensor _input  = input.contiguous();
   _output = _output.contiguous();
-
-  // Check that all tensors are allocated on GPU device.
-  if(!(_input.device().is_cuda() && _output.device().is_cuda()))
-    throw std::invalid_argument("copy_cute only supports GPU device. Use .to(device=torch.device('cuda'))");
 
   // Select the CUTLASS precision type to use based on Torch input data type.
   if(_input.dtype() == torch::kFloat16)
